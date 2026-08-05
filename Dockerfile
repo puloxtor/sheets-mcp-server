@@ -1,26 +1,30 @@
-FROM node:20-alpine
+FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install all dependencies (including devDependencies for building)
-RUN npm install
+# Install the upstream, published MCP server (github.com/taylorwilsdon/google_workspace_mcp)
+RUN pip install --no-cache-dir workspace-mcp
 
-# Copy source code and config
-COPY tsconfig.json ./
-COPY src/ ./src/
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app \
+    && mkdir -p /home/app/.google_workspace_mcp/credentials \
+    && chown -R app:app /home/app
+USER app
 
-# Build TypeScript
-RUN npm run build
+# Railway injects PORT; the server also accepts WORKSPACE_MCP_PORT/defaults to 8000
+EXPOSE 8000
+ARG PORT
+EXPOSE ${PORT:-8000}
 
-# Remove devDependencies
-RUN npm ci --omit=dev
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
 
-# Expose port (Railway provides PORT environment variable)
-EXPOSE 3000
+# Scope the server to just Sheets by default; override WORKSPACE_MCP_TOOLS
+# (e.g. "sheets,drive") to enable more services without touching this Dockerfile.
+ENV WORKSPACE_MCP_TOOLS=sheets
 
-# Start server
-CMD ["npm", "start"]
+CMD ["workspace-mcp", "--transport", "streamable-http"]
