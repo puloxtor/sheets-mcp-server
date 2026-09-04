@@ -1,4 +1,5 @@
 import { google, sheets_v4 } from 'googleapis';
+import { getGoogleAuth } from './auth';
 
 export class GoogleSheetsClient {
   private sheets: sheets_v4.Sheets | null = null;
@@ -10,21 +11,10 @@ export class GoogleSheetsClient {
 
   private initializeAuth() {
     try {
-      const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-      if (!clientEmail || !privateKey) {
-        console.warn('Google Credentials are not fully provided in environment variables.');
+      this.auth = getGoogleAuth();
+      if (!this.auth) {
         return;
       }
-
-      this.auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: clientEmail,
-          private_key: privateKey,
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
 
       this.sheets = google.sheets({ version: 'v4', auth: this.auth });
       console.log('Google Sheets Client Initialized successfully.');
